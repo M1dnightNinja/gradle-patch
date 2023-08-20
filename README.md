@@ -50,7 +50,7 @@ file located at `patch/main/java/Main.json` will patch the file at `src/main/jav
 ### Patch Files
 Patch files are written in JSON format. The root of each patch file should be an array with zero or more *patch entries*.
 Patch entries are JSON objects which define how the file in question should be patched. Each patch entries needs at 
-least two things: A *patch type* (`"type" "insert"/"set"/"replace"/etc.`) and one or more *line rules* (`"lines": []`)
+least two things: A *patch type* (`"type": "insert"/"set"/"replace"/etc.`) and one or more *line rules* (`"lines": []`)
 
 ### Patch Types
 Patch entries each have a single patch type. This determines the action which will be taken on all affected lines, as
