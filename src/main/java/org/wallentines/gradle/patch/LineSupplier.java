@@ -20,14 +20,8 @@ public interface LineSupplier {
         return file -> lines.stream().map(file::validateLine).toList();
     }
 
-    static LineSupplier range(int begin, int end) {
-        return file -> {
-            List<Integer> out = new ArrayList<>();
-            for(int i = begin; i <= end ; i++) {
-                out.add(file.validateLine(i));
-            }
-            return out;
-        };
+    static LineSupplier range(IntRange range) {
+        return file -> new ArrayList<>(range.getValues());
     }
 
     static LineSupplier all() {
@@ -40,26 +34,30 @@ public interface LineSupplier {
         };
     }
 
-    static LineSupplier find(String find) {
+    static LineSupplier find(String find, IntRange offset) {
 
         return file -> {
             List<Integer> out = new ArrayList<>();
             for(int i = 1 ; i <= file.getLength() ; i++) {
                 if(file.getLine(i).contains(find)) {
-                    out.add(i);
+                    for(int off : offset.getValues()) {
+                        out.add(i + off);
+                    }
                 }
             }
             return out;
         };
     }
 
-    static LineSupplier findRegex(Pattern find) {
+    static LineSupplier findRegex(Pattern find, IntRange offset) {
 
         return file -> {
             List<Integer> out = new ArrayList<>();
             for(int i = 1 ; i <= file.getLength() ; i++) {
                 if(find.matcher(file.getLine(i)).find()) {
-                    out.add(i);
+                    for(int off : offset.getValues()) {
+                        out.add(i + off);
+                    }
                 }
             }
             return out;
@@ -81,27 +79,6 @@ public interface LineSupplier {
             if(context.isNumber(value)) {
                 return SerializeResult.success(single(context.asNumber(value).intValue()));
             }
-            if(context.isList(value)) {
-                List<O> values = List.copyOf(context.asList(value));
-                if(values.size() != 2) {
-                    return SerializeResult.failure("Range line entries must contain exactly two elements!");
-                }
-                Number min = context.asNumber(values.get(0));
-                Number max = context.asNumber(values.get(1));
-
-                if(min == null || max == null) {
-                    return SerializeResult.failure("All elements in range line entries must be numbers!");
-                }
-
-                int iMin = min.intValue();
-                int iMax = max.intValue();
-
-                if(iMax <= iMin) {
-                    return SerializeResult.failure("The 'max' field in ranged line entries must be greater than the min entry!");
-                }
-
-                return SerializeResult.success(range(iMin, iMax));
-            }
             if(context.isMap(value)) {
 
                 Map<String, O> values = context.asMap(value);
@@ -119,58 +96,42 @@ public interface LineSupplier {
                     }
                     return SerializeResult.success(multiple(out));
                 }
-
-                if(values.containsKey("min") || values.containsKey("max")) {
-
-                    int min = 0;
-                    int max = Integer.MAX_VALUE;
-
-                    if(values.containsKey("min")) {
-                        Number num = context.asNumber(values.get("min"));
-                        if(num == null) {
-                            return SerializeResult.failure("The 'min' and 'max' fields in ranged line entries must be numbers!");
-                        }
-                        min = num.intValue();
-                    }
-                    if(values.containsKey("max")) {
-                        Number num = context.asNumber(values.get("max"));
-                        if(num == null) {
-                            return SerializeResult.failure("The 'min' and 'max' fields in ranged line entries must be numbers!");
-                        }
-                        max = num.intValue();
-                    }
-
-                    if(max <= min) {
-                        return SerializeResult.failure("The 'max' field in ranged line entries must be greater than the 'min' field!");
-                    }
-
-                    return SerializeResult.success(range(min, max));
-                }
-
                 if(values.containsKey("find")) {
                     if(!context.isString(values.get("find"))) {
                         return SerializeResult.failure("The 'find' field in find line entries must be a String!");
                     }
-                    return SerializeResult.success(find(context.asString(values.get("find"))));
-                }
 
+                    IntRange offset = new IntRange(0);
+                    if(values.containsKey("offset")) {
+                        offset = IntRange.SERIALIZER.deserialize(context, values.get("offset")).get().orElse(offset);
+                    }
+
+                    return SerializeResult.success(find(context.asString(values.get("find")), offset));
+                }
                 if(values.containsKey("find_regex")) {
-                    if(!context.isString(values.get("find"))) {
-                        return SerializeResult.failure("The 'find' field in find line entries must be a String!");
+                    if(!context.isString(values.get("find_regex"))) {
+                        return SerializeResult.failure("The 'find' field in find_regex line entries must be a String!");
                     }
                     Pattern p;
                     try {
-                        p = Pattern.compile(context.asString(values.get("find")));
+                        p = Pattern.compile(context.asString(values.get("find_regex")));
                     } catch (PatternSyntaxException ex) {
-                        return SerializeResult.failure("The 'find' field in find_regex line entries must be a valid Regex pattern!");
+                        return SerializeResult.failure("The 'find_regex' field in find_regex line entries must be a valid Regex pattern!");
                     }
 
-                    return SerializeResult.success(findRegex(p));
+                    IntRange offset = new IntRange(0);
+                    if(values.containsKey("offset")) {
+                        offset = IntRange.SERIALIZER.deserialize(context, values.get("offset")).get().orElse(offset);
+                    }
+
+                    return SerializeResult.success(findRegex(p, offset));
                 }
 
             }
 
-            return SerializeResult.failure("Don't know how to deserialize " + value + " as a line supplier!");
+            return IntRange.SERIALIZER.deserialize(context, value)
+                    .flatMap(LineSupplier::range)
+                    .mapError(err -> SerializeResult.failure("Don't know how to deserialize " + value + " as a line supplier!"));
         }
     };
 
