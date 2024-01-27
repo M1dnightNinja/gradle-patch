@@ -127,7 +127,7 @@ public class PatchEntry {
         }
     }
 
-    private static final Serializer<Pattern> PATTERN_SERIALIZER = InlineSerializer.of(Pattern::pattern, Pattern::compile);
+    private static final Serializer<Pattern> PATTERN_SERIALIZER = InlineSerializer.of(Pattern::pattern, str -> Pattern.compile(str, Pattern.MULTILINE));
 
     public static final Serializer<PatchEntry> SERIALIZER = new Serializer<>() {
         @Override
