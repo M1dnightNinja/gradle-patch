@@ -104,7 +104,6 @@ public class PatchEntry {
     public record Replace(String find, String replace) implements Action {
         @Override
         public void patch(LoadedFile file, IntRange lines) {
-
             for(IntRange ir : file.find(find)) {
                 if(ir.isWithin(lines)) {
                     file.setLines(ir, file.getLines(ir).toString().replace(find, replace));
@@ -117,12 +116,15 @@ public class PatchEntry {
         @Override
         public void patch(LoadedFile file, IntRange lines) {
 
-            for(IntRange ir : file.find(find)) {
-                if(ir.isWithin(lines)) {
-                    String str = file.getLines(ir).toString();
-                    Matcher matcher = find.matcher(str);
-                    file.setLines(ir, matcher.replaceAll(replace));
-                }
+            CharSequence in = file.getLines(lines);
+            Matcher matcher = find.matcher(in);
+            StringBuilder builder = new StringBuilder();
+            while(matcher.find()) {
+                matcher.appendReplacement(builder, replace);
+            }
+            if(!builder.isEmpty()) {
+                matcher.appendTail(builder);
+                file.setLines(lines, builder.toString());
             }
         }
     }

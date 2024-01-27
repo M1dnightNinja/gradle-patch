@@ -3,6 +3,8 @@ import org.junit.jupiter.api.Test;
 import org.wallentines.gradle.patch.LoadedFile;
 
 import java.io.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class TestLoadedFile {
 
@@ -57,6 +59,25 @@ public class TestLoadedFile {
         out = os.toString();
 
         Assertions.assertEquals("Hola\nMundo\nÚltima Línea", out);
+
+    }
+    @Test
+    public void testTemp() {
+
+        String str =
+                "        SpigotItem si = (SpigotItem) item;\n" +
+                "        switch(slot) {\n" +
+                "        case FEET -> internal.getInventory().setBoots(si.getInternal());\n" +
+                "            case LEGS -> internal.getInventory().setLeggings(si.getInternal());\n" +
+                "            case CHEST -> internal.getInventory().setChestplate(si.getInternal());\n" +
+                "            case HEAD -> internal.getInventory().setHelmet(si.getInternal());\n" +
+                "            case MAINHAND -> internal.getInventory().setItemInHand(si.getInternal());\n" +
+                "            case OFFHAND -> internal.getInventory().setItemInOffHand(si.getInternal());";
+        Pattern pattern = Pattern.compile("^ *switch *\\(slot\\) *\\{ *$", Pattern.MULTILINE);
+
+        Matcher matcher = pattern.matcher(str);
+
+        Assertions.assertTrue(matcher.find());
 
     }
 

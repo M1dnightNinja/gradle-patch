@@ -45,8 +45,8 @@ public class TestPatchFile {
     @Test
     public void testReplaceFile() {
 
-        File toPatch = new File("ContextSerializer.java");
-        File patch = new File("ContextSerializer.json");
+        File toPatch = new File("SpigotPlayer.java");
+        File patch = new File("SpigotPlayer.json");
 
         PatchFile pf;
         try {
@@ -76,6 +76,8 @@ public class TestPatchFile {
             return;
         }
         String out = os.toString();
+
+        Assertions.assertFalse(out.contains("->"));
     }
 
 }

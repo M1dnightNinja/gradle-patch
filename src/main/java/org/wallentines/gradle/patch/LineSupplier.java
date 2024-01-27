@@ -100,7 +100,7 @@ public interface LineSupplier {
                     }
                     Pattern p;
                     try {
-                        p = Pattern.compile(context.asString(values.get("find_regex")));
+                        p = Pattern.compile(context.asString(values.get("find_regex")), Pattern.MULTILINE);
                     } catch (PatternSyntaxException ex) {
                         return SerializeResult.failure("The 'find_regex' field in find_regex line entries must be a valid Regex pattern!");
                     }
