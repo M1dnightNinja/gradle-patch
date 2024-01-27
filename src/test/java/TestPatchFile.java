@@ -6,7 +6,6 @@ import org.wallentines.gradle.patch.PatchEntry;
 import org.wallentines.gradle.patch.PatchFile;
 import org.wallentines.mdcfg.codec.JSONCodec;
 import org.wallentines.mdcfg.serializer.ConfigContext;
-import org.wallentines.mdcfg.serializer.SerializeContext;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;

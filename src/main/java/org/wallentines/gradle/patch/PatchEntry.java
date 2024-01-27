@@ -107,7 +107,7 @@ public class PatchEntry {
 
             for(IntRange ir : file.find(find)) {
                 if(ir.isWithin(lines)) {
-                    file.setLines(ir, file.getLines(ir).replace(find, replace));
+                    file.setLines(ir, file.getLines(ir).toString().replace(find, replace));
                 }
             }
         }
@@ -119,7 +119,7 @@ public class PatchEntry {
 
             for(IntRange ir : file.find(find)) {
                 if(ir.isWithin(lines)) {
-                    String str = file.getLines(ir);
+                    String str = file.getLines(ir).toString();
                     Matcher matcher = find.matcher(str);
                     file.setLines(ir, matcher.replaceAll(replace));
                 }

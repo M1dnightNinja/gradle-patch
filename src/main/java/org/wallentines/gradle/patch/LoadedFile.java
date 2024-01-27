@@ -7,10 +7,11 @@ import java.util.regex.Pattern;
 
 public class LoadedFile {
 
-    private final String data;
+    private String data;
     private final List<Integer> lineFeeds = new ArrayList<>();
     private final TreeSet<Integer> toRemove = new TreeSet<>();
     private final SortedMap<Integer, List<String>> toInsert = new TreeMap<>();
+    private final SortedMap<Integer, String> overrides = new TreeMap<>();
 
     public LoadedFile(String data) {
         this.data = data;
@@ -31,17 +32,17 @@ public class LoadedFile {
         return lineFeeds.size();
     }
 
-    public String getLine(int line) {
+    public CharSequence getLine(int line) {
 
-        return data.substring(getLineStart(line), getLineEnd(line));
+        return data.subSequence(getLineStart(line), getLineEnd(line));
     }
 
-    public String getLines(IntRange range) {
+    public CharSequence getLines(IntRange range) {
 
-        return data.substring(getLineStart(range.min()), getLineEnd(range.max()));
+        return data.subSequence(getLineStart(range.min()), getLineEnd(range.max()));
     }
 
-    public String getAllLines() {
+    public CharSequence getAllLines() {
         return data;
     }
 
@@ -51,13 +52,63 @@ public class LoadedFile {
 
     public void setLine(int line, String newLine) {
 
-        toRemove.add(line);
-        insertAt(line, newLine);
+        setLines(new IntRange(line), newLine);
     }
 
     public void setLines(IntRange lines, String newLine) {
-        toRemove.addAll(lines.getValues());
-        insertAt(lines.min(), newLine);
+
+        StringBuilder out = new StringBuilder();
+
+        int offset = 0;
+        int insertIndex = lines.min() - 1;
+        int oldLength = getLines(lines).length();
+
+        if(lines.min() > 1) {
+            out.append(getLines(new IntRange(1, lines.min()-1)));
+            out.append("\n");
+            offset = lineFeeds.get(insertIndex - 1) + 1;
+        }
+
+        out.append(newLine);
+        if(lines.max() < getLength()) {
+            out.append('\n');
+        }
+
+        // Correct newlines
+        if(lines.max() < getLength()) {
+            out.append(getLines(new IntRange(lines.max() + 1, getLength())));
+        }
+
+        List<Integer> newLineFeeds = new ArrayList<>();
+        int index = -1;
+        while((index = newLine.indexOf('\n', index)) != -1) {
+            newLineFeeds.add(offset + index);
+            index++;
+        }
+        newLineFeeds.add(offset + newLine.length());
+
+        if(newLineFeeds.size() < lines.length()) {
+            for(int i = 0 ; i < lines.length() - newLineFeeds.size() ; i++) {
+                lineFeeds.remove(insertIndex + i);
+            }
+        } else if(newLineFeeds.size() > lines.length()) {
+            for(int i = 0 ; i < newLineFeeds.size() - lines.length() ; i++) {
+                lineFeeds.add(insertIndex + i, 0);
+            }
+        }
+
+        for(int i = 0 ; i < newLineFeeds.size() ; i++) {
+            lineFeeds.set(insertIndex + i, newLineFeeds.get(i));
+        }
+
+        if(newLine.length() != oldLength) {
+            int difference = newLine.length() - oldLength;
+            for(int i = insertIndex + newLineFeeds.size() ; i < getLength() ; i++) {
+                lineFeeds.set(i, lineFeeds.get(i) + difference);
+            }
+        }
+
+        this.data = out.toString();
     }
 
     public Collection<IntRange> find(String substr) {
@@ -120,15 +171,6 @@ public class LoadedFile {
     public void write(OutputStream os) throws IOException {
 
         StringBuilder toWrite = new StringBuilder();
-        if(toInsert.containsKey(0)) {
-            for(String s : toInsert.get(0)) {
-                if(!toWrite.isEmpty()) {
-                    toWrite.append("\n");
-                }
-                toWrite.append(s);
-            }
-        }
-
         for(int i = 0 ; i <= getLength() ; i++) {
 
             if(i > 0 && !toRemove.contains(i)) {

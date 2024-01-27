@@ -23,6 +23,10 @@ public record IntRange(int min, int max) implements Comparable<IntRange> {
         return out;
     }
 
+    public int length() {
+        return max - min + 1;
+    }
+
     public boolean isWithin(IntRange range) {
         return min >= range.min && max <= range.max;
     }
