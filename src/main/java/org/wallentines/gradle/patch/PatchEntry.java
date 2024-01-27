@@ -1,11 +1,9 @@
 package org.wallentines.gradle.patch;
 
-import org.wallentines.mdcfg.ConfigSection;
 import org.wallentines.mdcfg.serializer.*;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -21,51 +19,47 @@ public class PatchEntry {
 
     public void patch(LoadedFile file) {
         for(LineSupplier supp : lines) {
-            for(int line : supp.getLines(file)) {
-                action.patch(file, line);
+            for(IntRange range : supp.getLines(file)) {
+                action.patch(file, range);
             }
         }
     }
 
     public enum Type {
 
-        INSERT("insert", sec -> {
-            String value = sec.getString("value");
-            return (file, line) -> file.insertAt(line + 1, value);
-        }),
-        INSERT_BEFORE("insert_before", sec -> {
-            String value = sec.getString("value");
-            return (file, line) -> file.insertAt(line, value);
-        }),
-        SET("set", sec -> {
-            String value = sec.getString("value");
-            return (file, line) -> file.setLine(line, value);
-        }),
-        REPLACE("replace", sec -> {
-            String find = sec.getString("find");
-            String replace = sec.getString("replace");
-            return (file, line) -> file.setLine(line, file.getLine(line).replace(find, replace));
-        }),
-        REPLACE_REGEX("replace_regex", sec -> {
-
-            Pattern pattern = Pattern.compile(sec.getString("find"));
-            String replacement = sec.getString("replace");
-
-            return (file, line) -> {
-                Matcher matcher = pattern.matcher(file.getLine(line));
-                if(matcher.find()) {
-                    file.setLine(line, matcher.replaceAll(replacement));
-                }
-            };
-
-        });
+        INSERT("insert", Insert.class, ObjectSerializer.create(
+                Serializer.STRING.entry("value", Insert::value),
+                Insert::new
+        )),
+        INSERT_BEFORE("insert_before", InsertBefore.class, ObjectSerializer.create(
+                Serializer.STRING.entry("value", InsertBefore::value),
+                InsertBefore::new
+        )),
+        SET("set", Set.class, ObjectSerializer.create(
+                Serializer.STRING.entry("value", Set::value),
+                Set::new
+        )),
+        REPLACE("replace", Replace.class, ObjectSerializer.create(
+                Serializer.STRING.entry("find", Replace::find),
+                Serializer.STRING.entry("replace", Replace::replace),
+                Replace::new
+        )),
+        REPLACE_REGEX("replace_regex", RegRep.class, ObjectSerializer.create(
+                PATTERN_SERIALIZER.entry("find", RegRep::find),
+                Serializer.STRING.entry("replace", RegRep::replace),
+                RegRep::new
+        ));
 
         final String id;
-        final Function<ConfigSection, Action> actionDeserializer;
+        final Serializer<Action> actionSerializer;
 
-        Type(String id, Function<ConfigSection, Action> actionDeserializer) {
+        @SuppressWarnings("unchecked")
+        <T extends Action> Type(String id, Class<T> clazz, Serializer<T> actionSerializer) {
             this.id = id;
-            this.actionDeserializer = actionDeserializer;
+            this.actionSerializer = actionSerializer.map(act -> {
+                if(act.getClass() != clazz) return null;
+                return (T) act;
+            }, act -> act);
         }
 
         public String getId() {
@@ -81,9 +75,59 @@ public class PatchEntry {
     }
 
     public interface Action {
-        void patch(LoadedFile file, int line);
+        void patch(LoadedFile file, IntRange lines);
     }
 
+    public record Insert(String value) implements Action {
+        @Override
+        public void patch(LoadedFile file, IntRange lines) {
+            file.insertAt(lines.max() + 1, value);
+        }
+    }
+
+    public record InsertBefore(String value) implements Action {
+        @Override
+        public void patch(LoadedFile file, IntRange lines) {
+            file.insertAt(lines.min(), value);
+        }
+    }
+
+
+    public record Set(String value) implements Action {
+        @Override
+        public void patch(LoadedFile file, IntRange lines) {
+            file.setLines(lines, value);
+        }
+    }
+
+
+    public record Replace(String find, String replace) implements Action {
+        @Override
+        public void patch(LoadedFile file, IntRange lines) {
+
+            for(IntRange ir : file.find(find)) {
+                if(ir.isWithin(lines)) {
+                    file.setLines(ir, file.getLines(ir).replace(find, replace));
+                }
+            }
+        }
+    }
+
+    public record RegRep(Pattern find, String replace) implements Action {
+        @Override
+        public void patch(LoadedFile file, IntRange lines) {
+
+            for(IntRange ir : file.find(find)) {
+                if(ir.isWithin(lines)) {
+                    String str = file.getLines(ir);
+                    Matcher matcher = find.matcher(str);
+                    file.setLines(ir, matcher.replaceAll(replace));
+                }
+            }
+        }
+    }
+
+    private static final Serializer<Pattern> PATTERN_SERIALIZER = InlineSerializer.of(Pattern::pattern, Pattern::compile);
 
     public static final Serializer<PatchEntry> SERIALIZER = new Serializer<>() {
         @Override
@@ -110,7 +154,7 @@ public class PatchEntry {
                 return SerializeResult.failure(supp.getError());
             }
 
-            return SerializeResult.success(new PatchEntry(t.actionDeserializer.apply(context.convert(ConfigContext.INSTANCE, value).asSection()), supp.getOrThrow()));
+            return t.actionSerializer.deserialize(context, value).flatMap(act -> new PatchEntry(act, supp.getOrThrow()));
         }
     };
 

@@ -1,32 +1,21 @@
 package org.wallentines.gradle.patch;
 
+import org.jetbrains.annotations.NotNull;
 import org.wallentines.mdcfg.serializer.SerializeContext;
 import org.wallentines.mdcfg.serializer.SerializeResult;
 import org.wallentines.mdcfg.serializer.Serializer;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-public class IntRange {
+public record IntRange(int min, int max) implements Comparable<IntRange> {
 
-    private final int min;
-    private final int max;
-
-
-    public IntRange(int min, int max) {
-        this.min = min;
-        this.max = max;
-    }
 
     public IntRange(int exact) {
-        this.min = exact;
-        this.max = exact;
+        this(exact, exact);
     }
 
 
-    Collection<Integer> getValues() {
+    public Collection<Integer> getValues() {
         List<Integer> out = new ArrayList<>();
         for(int i = min ; i <= max ; i++) {
             out.add(i);
@@ -34,6 +23,9 @@ public class IntRange {
         return out;
     }
 
+    public boolean isWithin(IntRange range) {
+        return min >= range.min && max <= range.max;
+    }
 
     public static final Serializer<IntRange> SERIALIZER = new Serializer<>() {
         @Override
@@ -105,4 +97,8 @@ public class IntRange {
         }
     };
 
+    @Override
+    public int compareTo(@NotNull IntRange o) {
+        return o.min - min;
+    }
 }

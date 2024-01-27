@@ -19,6 +19,14 @@ repositories {
 dependencies {
     implementation("org.wallentines:midnightcfg-api:2.0.0-SNAPSHOT")
     implementation("org.wallentines:midnightcfg-codec-json:2.0.0-SNAPSHOT")
+
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+}
+
+tasks.test {
+    useJUnitPlatform()
+    workingDir(file("run/test"))
 }
 
 gradlePlugin {

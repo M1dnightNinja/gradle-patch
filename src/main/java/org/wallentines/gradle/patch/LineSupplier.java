@@ -10,40 +10,30 @@ import java.util.regex.PatternSyntaxException;
 
 public interface LineSupplier {
 
-    Collection<Integer> getLines(LoadedFile file);
+    Collection<IntRange> getLines(LoadedFile file);
 
     static LineSupplier single(int line) {
-        return file -> Collections.singleton(file.validateLine(line));
+        return file -> Collections.singleton(new IntRange(file.validateLine(line)));
     }
 
     static LineSupplier multiple(Collection<Integer> lines) {
-        return file -> lines.stream().map(file::validateLine).toList();
+        return file -> lines.stream().map(file::validateLine).map(IntRange::new).toList();
     }
 
     static LineSupplier range(IntRange range) {
-        return file -> new ArrayList<>(range.getValues());
+        return file -> List.of(range);
     }
 
     static LineSupplier all() {
-        return file -> {
-            List<Integer> out = new ArrayList<>();
-            for(int i = 1; i <= file.getLength() ; i++) {
-                out.add(i);
-            }
-            return out;
-        };
+        return file -> List.of(new IntRange(1, file.getLength()));
     }
 
     static LineSupplier find(String find, IntRange offset) {
 
         return file -> {
-            List<Integer> out = new ArrayList<>();
-            for(int i = 1 ; i <= file.getLength() ; i++) {
-                if(file.getLine(i).contains(find)) {
-                    for(int off : offset.getValues()) {
-                        out.add(i + off);
-                    }
-                }
+            TreeSet<IntRange> out = new TreeSet<>();
+            for(IntRange i : file.find(find)) {
+                out.add(new IntRange(i.min() + offset.min(), i.max() + offset.max()));
             }
             return out;
         };
@@ -52,13 +42,9 @@ public interface LineSupplier {
     static LineSupplier findRegex(Pattern find, IntRange offset) {
 
         return file -> {
-            List<Integer> out = new ArrayList<>();
-            for(int i = 1 ; i <= file.getLength() ; i++) {
-                if(find.matcher(file.getLine(i)).find()) {
-                    for(int off : offset.getValues()) {
-                        out.add(i + off);
-                    }
-                }
+            TreeSet<IntRange> out = new TreeSet<>();
+            for(IntRange i : file.find(find)) {
+                out.add(new IntRange(i.min() + offset.min(), i.max() + offset.max()));
             }
             return out;
         };

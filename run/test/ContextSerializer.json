@@ -1,0 +1,14 @@
+[
+  {
+    "lines": [ "all" ],
+    "type": "replace",
+    "find": "return new Serializer<>() {",
+    "replace": "return new Serializer<T>() {"
+  },
+  {
+    "lines": [ "all" ],
+    "type": "replace",
+    "find": "return new ContextSerializer<>() {",
+    "replace": "return new ContextSerializer<T,C>() {"
+  }
+]
