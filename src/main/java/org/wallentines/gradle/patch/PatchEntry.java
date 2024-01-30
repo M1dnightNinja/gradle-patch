@@ -1,9 +1,13 @@
 package org.wallentines.gradle.patch;
 
-import org.wallentines.mdcfg.serializer.*;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -27,39 +31,18 @@ public class PatchEntry {
 
     public enum Type {
 
-        INSERT("insert", Insert.class, ObjectSerializer.create(
-                Serializer.STRING.entry("value", Insert::value),
-                Insert::new
-        )),
-        INSERT_BEFORE("insert_before", InsertBefore.class, ObjectSerializer.create(
-                Serializer.STRING.entry("value", InsertBefore::value),
-                InsertBefore::new
-        )),
-        SET("set", Set.class, ObjectSerializer.create(
-                Serializer.STRING.entry("value", Set::value),
-                Set::new
-        )),
-        REPLACE("replace", Replace.class, ObjectSerializer.create(
-                Serializer.STRING.entry("find", Replace::find),
-                Serializer.STRING.entry("replace", Replace::replace),
-                Replace::new
-        )),
-        REPLACE_REGEX("replace_regex", RegRep.class, ObjectSerializer.create(
-                PATTERN_SERIALIZER.entry("find", RegRep::find),
-                Serializer.STRING.entry("replace", RegRep::replace),
-                RegRep::new
-        ));
+        INSERT("insert", ele -> new Insert(ele.get("value").getAsString())),
+        INSERT_BEFORE("insert_before", ele -> new InsertBefore(ele.get("value").getAsString())),
+        SET("set", ele -> new Set(ele.get("value").getAsString())),
+        REPLACE("replace", ele -> new Replace(ele.get("find").getAsString(), ele.get("replace").getAsString())),
+        REPLACE_REGEX("replace_regex", ele -> new RegRep(Pattern.compile(ele.get("find").getAsString(), Pattern.MULTILINE), ele.get("replace").getAsString()));
 
         final String id;
-        final Serializer<Action> actionSerializer;
+        final Function<JsonObject, Action> actionSerializer;
 
-        @SuppressWarnings("unchecked")
-        <T extends Action> Type(String id, Class<T> clazz, Serializer<T> actionSerializer) {
+        Type(String id, Function<JsonObject, Action> actionDeserializer) {
             this.id = id;
-            this.actionSerializer = actionSerializer.map(act -> {
-                if(act.getClass() != clazz) return null;
-                return (T) act;
-            }, act -> act);
+            this.actionSerializer = actionDeserializer;
         }
 
         public String getId() {
@@ -129,35 +112,22 @@ public class PatchEntry {
         }
     }
 
-    private static final Serializer<Pattern> PATTERN_SERIALIZER = InlineSerializer.of(Pattern::pattern, str -> Pattern.compile(str, Pattern.MULTILINE));
 
-    public static final Serializer<PatchEntry> SERIALIZER = new Serializer<>() {
-        @Override
-        public <O> SerializeResult<O> serialize(SerializeContext<O> context, PatchEntry value) {
-            return null;
+    public static PatchEntry load(JsonObject obj) {
+
+        String typeId = obj.get("type").getAsString();
+        Type t = Type.byId(typeId);
+        if(t == null) {
+            throw new IllegalArgumentException("Unknown entry type " + typeId + "!");
         }
 
-        @Override
-        public <O> SerializeResult<PatchEntry> deserialize(SerializeContext<O> context, O value) {
-
-            if(!context.isMap(value)) {
-                return SerializeResult.failure("Value must be a section!");
-            }
-
-            String typeId = context.asString(context.get("type", value));
-            Type t = Type.byId(typeId);
-            if(t == null) {
-                return SerializeResult.failure("Unknown type " + typeId + "!");
-            }
-
-            SerializeResult<Collection<LineSupplier>> supp = LineSupplier.SERIALIZER.listOf().deserialize(context, context.get("lines", value));
-
-            if(!supp.isComplete()) {
-                return SerializeResult.failure(supp.getError());
-            }
-
-            return t.actionSerializer.deserialize(context, value).flatMap(act -> new PatchEntry(act, supp.getOrThrow()));
+        List<LineSupplier> supps = new ArrayList<>();
+        JsonArray lines = obj.getAsJsonArray("lines");
+        for(JsonElement ele : lines) {
+            supps.add(LineSupplier.load(ele));
         }
-    };
+
+        return new PatchEntry(t.actionSerializer.apply(obj), supps);
+    }
 
 }

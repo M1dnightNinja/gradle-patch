@@ -1,12 +1,11 @@
 package org.wallentines.gradle.patch;
 
-import org.wallentines.mdcfg.serializer.SerializeContext;
-import org.wallentines.mdcfg.serializer.SerializeResult;
-import org.wallentines.mdcfg.serializer.Serializer;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 
 import java.util.*;
 import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 
 public interface LineSupplier {
 
@@ -50,75 +49,54 @@ public interface LineSupplier {
         };
     }
 
-    Serializer<LineSupplier> SERIALIZER = new Serializer<>() {
-        @Override
-        public <O> SerializeResult<O> serialize(SerializeContext<O> context, LineSupplier value) {
-            return null;
+    static LineSupplier multi(List<LineSupplier> children) {
+
+        return file -> {
+            List<IntRange> out = new ArrayList<>();
+            for(LineSupplier supp : children) {
+                out.addAll(supp.getLines(file));
+            }
+            return out;
+        };
+    }
+
+
+    static LineSupplier load(JsonElement ele) {
+
+        if(ele.isJsonPrimitive() && ele.getAsJsonPrimitive().isString() && ele.getAsString().equalsIgnoreCase("all")) {
+            return all();
+        }
+        if(ele.isJsonPrimitive() && ele.getAsJsonPrimitive().isNumber()) {
+            return single(ele.getAsInt());
+        }
+        if(ele.isJsonObject()) {
+            JsonObject obj = ele.getAsJsonObject();
+            if(obj.has("value")) {
+                return load(obj.get("value"));
+            }
+            if(obj.has("values")) {
+                JsonArray arr = obj.getAsJsonArray("values");
+                List<LineSupplier> out = new ArrayList<>();
+                for(JsonElement child : arr) {
+                    out.add(load(child));
+                }
+                return multi(out);
+            }
+            IntRange offset = new IntRange(0);
+            if(obj.has("offset")) {
+                offset = IntRange.load(obj.get("offset"));
+            }
+
+            if(obj.has("find")) {
+                return find(obj.get("find").getAsString(), offset);
+            }
+
+            if(obj.has("find_regex")) {
+                return findRegex(Pattern.compile(obj.get("find_regex").getAsString(), Pattern.MULTILINE), offset);
+            }
         }
 
-        @Override
-        public <O> SerializeResult<LineSupplier> deserialize(SerializeContext<O> context, O value) {
-
-            if(context.isString(value) && context.asString(value).equalsIgnoreCase("all")) {
-                return SerializeResult.success(all());
-            }
-            if(context.isNumber(value)) {
-                return SerializeResult.success(single(context.asNumber(value).intValue()));
-            }
-            if(context.isMap(value)) {
-
-                Map<String, O> values = context.asMap(value);
-                if(values.containsKey("value")) {
-                    return deserialize(context, values.get("value"));
-                }
-                if(values.containsKey("values")) {
-                    List<Integer> out = new ArrayList<>();
-                    for(O o : values.values()) {
-                        Number num = context.asNumber(o);
-                        if(num == null) {
-                            return SerializeResult.failure("All elements in multi line entries must be numbers!");
-                        }
-                        out.add(context.asNumber(o).intValue());
-                    }
-                    return SerializeResult.success(multiple(out));
-                }
-                if(values.containsKey("find")) {
-                    if(!context.isString(values.get("find"))) {
-                        return SerializeResult.failure("The 'find' field in find line entries must be a String!");
-                    }
-
-                    IntRange offset = new IntRange(0);
-                    if(values.containsKey("offset")) {
-                        offset = IntRange.SERIALIZER.deserialize(context, values.get("offset")).get().orElse(offset);
-                    }
-
-                    return SerializeResult.success(find(context.asString(values.get("find")), offset));
-                }
-                if(values.containsKey("find_regex")) {
-                    if(!context.isString(values.get("find_regex"))) {
-                        return SerializeResult.failure("The 'find' field in find_regex line entries must be a String!");
-                    }
-                    Pattern p;
-                    try {
-                        p = Pattern.compile(context.asString(values.get("find_regex")), Pattern.MULTILINE);
-                    } catch (PatternSyntaxException ex) {
-                        return SerializeResult.failure("The 'find_regex' field in find_regex line entries must be a valid Regex pattern!");
-                    }
-
-                    IntRange offset = new IntRange(0);
-                    if(values.containsKey("offset")) {
-                        offset = IntRange.SERIALIZER.deserialize(context, values.get("offset")).get().orElse(offset);
-                    }
-
-                    return SerializeResult.success(findRegex(p, offset));
-                }
-
-            }
-
-            return IntRange.SERIALIZER.deserialize(context, value)
-                    .flatMap(LineSupplier::range)
-                    .mapError(err -> SerializeResult.failure("Don't know how to deserialize " + value + " as a line supplier!"));
-        }
-    };
+        throw new IllegalArgumentException("Don't know how to read " + ele + " as a line serializer!");
+    }
 
 }

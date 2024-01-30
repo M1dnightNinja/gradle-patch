@@ -1,7 +1,9 @@
 package org.wallentines.gradle.patch;
 
-import org.wallentines.mdcfg.serializer.Serializer;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -22,6 +24,17 @@ public class PatchFile {
             ent.patch(file);
         }
     }
-    public static final Serializer<PatchFile> SERIALIZER = PatchEntry.SERIALIZER.listOf().map(PatchFile::getEntries, PatchFile::new);
+
+    public static PatchFile load(JsonArray array) {
+
+        List<PatchEntry> out = new ArrayList<>();
+        for(JsonElement ele : array) {
+            if(ele.isJsonObject()) {
+                out.add(PatchEntry.load(ele.getAsJsonObject()));
+            }
+        }
+
+        return new PatchFile(out);
+    }
 
 }

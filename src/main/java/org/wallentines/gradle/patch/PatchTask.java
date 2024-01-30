@@ -1,10 +1,9 @@
 package org.wallentines.gradle.patch;
 
+import com.google.gson.*;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.file.SourceDirectorySet;
 import org.gradle.api.tasks.TaskAction;
-import org.wallentines.mdcfg.codec.JSONCodec;
-import org.wallentines.mdcfg.serializer.ConfigContext;
 
 import java.io.*;
 
@@ -43,7 +42,10 @@ public class PatchTask extends DefaultTask {
                 PatchFile pf;
                 try(FileInputStream fis = new FileInputStream(patch)) {
 
-                    pf = PatchFile.SERIALIZER.deserialize(ConfigContext.INSTANCE, JSONCodec.loadConfig(fis)).getOrThrow();
+                    Gson gson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+
+                    JsonArray obj = gson.fromJson(new BufferedReader(new InputStreamReader(fis)), JsonArray.class);
+                    pf = PatchFile.load(obj);
 
                 } catch (IOException ex) {
                     throw new IllegalStateException("Unable to read patch file " + patch + "! " + ex.getMessage());
